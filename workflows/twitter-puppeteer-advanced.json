@@ -1,0 +1,146 @@
+{
+  "name": "Twitter Puppeteer Scraper - Advanced",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 0 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "Hourly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "node",
+        "options": {
+          "cwd": "/tmp"
+        }
+      },
+      "name": "Puppeteer Twitter Scraper",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const puppeteer = require('puppeteer');\n\n// Configuration\nconst config = {\n  filters: [\n    'filter:blue_verified min_faves:3 Podha AND (\"RWA\" OR \"Real World Assets\" OR \"Yield\")',\n    'filter:blue_verified min_faves:3 Solana AND (\"Smart Vaults\" OR \"Safe Yield\" OR \"Podha\")',\n    'filter:blue_verified min_faves:3 Bitcoin AND (\"tokenized treasury\" OR \"credit protocol\" OR \"RWA on-chain\")',\n    'filter:blue_verified min_faves:3 DeFi AND (\"custodial vault\" OR \"delta neutral\")'\n  ],\n  twitterCookie: process.env.TWITTER_COOKIE || '',\n  username: process.env.TWITTER_USERNAME || '',\n  password: process.env.TWITTER_PASSWORD || ''\n};\n\nasync function scrapeTwitter() {\n  const browser = await puppeteer.launch({\n    headless: true,\n    args: ['--no-sandbox', '--disable-setuid-sandbox']\n  });\n  \n  const page = await browser.newPage();\n  \n  // Set user agent\n  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');\n  \n  const allTweets = [];\n  \n  try {\n    // Login or set session cookie\n    if (config.twitterCookie) {\n      // Use existing session cookie\n      await page.setCookie({\n        name: 'auth_token',\n        value: config.twitterCookie,\n        domain: '.twitter.com'\n      });\n    } else if (config.username && config.password) {\n      // Login with credentials\n      await page.goto('https://twitter.com/login');\n      await page.waitForSelector('input[name=\"text\"]');\n      await page.type('input[name=\"text\"]', config.username);\n      await page.click('div[role=\"button\"]:has-text(\"Next\")');\n      await page.waitForSelector('input[name=\"password\"]');\n      await page.type('input[name=\"password\"]', config.password);\n      await page.click('div[role=\"button\"]:has-text(\"Log in\")');\n      await page.waitForNavigation();\n    }\n    \n    // Process each search filter\n    for (const filter of config.filters) {\n      try {\n        const searchUrl = `https://twitter.com/search?q=${encodeURIComponent(filter)}&src=typed_query&f=live`;\n        await page.goto(searchUrl);\n        await page.waitForSelector('article[data-testid=\"tweet\"]', { timeout: 10000 });\n        \n        // Scroll to load more tweets\n        await page.evaluate(() => {\n          window.scrollTo(0, document.body.scrollHeight);\n        });\n        await page.waitForTimeout(2000);\n        \n        // Extract tweets\n        const tweets = await page.evaluate(() => {\n          const tweetElements = document.querySelectorAll('article[data-testid=\"tweet\"]');\n          const extractedTweets = [];\n          \n          tweetElements.forEach(tweet => {\n            try {\n              const textElement = tweet.querySelector('div[data-testid=\"tweetText\"]');\n              const userElement = tweet.querySelector('div[data-testid=\"User-Name\"] a');\n              const timeElement = tweet.querySelector('time');\n              const likesElement = tweet.querySelector('div[data-testid=\"like\"] span');\n              const retweetsElement = tweet.querySelector('div[data-testid=\"retweet\"] span');\n              const verifiedElement = tweet.querySelector('svg[data-testid=\"icon-verified\"]');\n              \n              if (textElement && userElement) {\n                const tweetText = textElement.innerText;\n                const username = userElement.href.split('/').pop();\n                const timestamp = timeElement ? timeElement.getAttribute('datetime') : new Date().toISOString();\n                const likes = likesElement ? parseInt(likesElement.innerText.replace(/[^0-9]/g, '')) || 0 : 0;\n                const retweets = retweetsElement ? parseInt(retweetsElement.innerText.replace(/[^0-9]/g, '')) || 0 : 0;\n                const isVerified = !!verifiedElement;\n                \n                // Only include tweets that meet criteria\n                if (likes >= 3 && isVerified) {\n                  extractedTweets.push({\n                    id: `${username}_${Date.now()}_${Math.random()}`,\n                    username: username,\n                    text: tweetText,\n                    url: `https://twitter.com/${username}/status/${tweet.getAttribute('data-tweet-id') || Date.now()}`,\n                    timestamp: timestamp,\n                    likes: likes,\n                    retweets: retweets,\n                    isVerified: isVerified,\n                    filter: filter\n                  });\n                }\n              }\n            } catch (e) {\n              console.error('Error extracting tweet:', e);\n            }\n          });\n          \n          return extractedTweets;\n        });\n        \n        allTweets.push(...tweets);\n        \n      } catch (e) {\n        console.error(`Error processing filter ${filter}:`, e);\n      }\n    }\n    \n  } catch (e) {\n    console.error('Error during scraping:', e);\n  } finally {\n    await browser.close();\n  }\n  \n  return allTweets;\n}\n\n// Main execution\n(async () => {\n  try {\n    const tweets = await scrapeTwitter();\n    console.log(JSON.stringify(tweets, null, 2));\n  } catch (error) {\n    console.error('Scraping failed:', error);\n    process.exit(1);\n  }\n})();"
+      },
+      "name": "Generate Puppeteer Script",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Alternative: Use Execute Command node to run Puppeteer\nconst puppeteerScript = `\nconst puppeteer = require('puppeteer');\n\n(async () => {\n  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });\n  const page = await browser.newPage();\n  \n  // Set cookies if available\n  if (process.env.TWITTER_COOKIE) {\n    await page.setCookie({\n      name: 'auth_token',\n      value: process.env.TWITTER_COOKIE,\n      domain: '.twitter.com'\n    });\n  }\n  \n  const filters = [\n    'filter:blue_verified min_faves:3 Podha AND (\"RWA\" OR \"Real World Assets\" OR \"Yield\")',\n    'filter:blue_verified min_faves:3 Solana AND (\"Smart Vaults\" OR \"Safe Yield\" OR \"Podha\")',\n    'filter:blue_verified min_faves:3 Bitcoin AND (\"tokenized treasury\" OR \"credit protocol\" OR \"RWA on-chain\")',\n    'filter:blue_verified min_faves:3 DeFi AND (\"custodial vault\" OR \"delta neutral\")'\n  ];\n  \n  const allTweets = [];\n  \n  for (const filter of filters) {\n    try {\n      const searchUrl = \\`https://twitter.com/search?q=\\${encodeURIComponent(filter)}&src=typed_query&f=live\\`;\n      await page.goto(searchUrl);\n      await page.waitForSelector('article[data-testid=\"tweet\"]', { timeout: 10000 });\n      \n      const tweets = await page.evaluate(() => {\n        const tweetElements = document.querySelectorAll('article[data-testid=\"tweet\"]');\n        return Array.from(tweetElements).slice(0, 10).map(tweet => {\n          const textEl = tweet.querySelector('div[data-testid=\"tweetText\"]');\n          const userEl = tweet.querySelector('div[data-testid=\"User-Name\"] a');\n          const timeEl = tweet.querySelector('time');\n          const likesEl = tweet.querySelector('div[data-testid=\"like\"] span');\n          const verifiedEl = tweet.querySelector('svg[data-testid=\"icon-verified\"]');\n          \n          if (textEl && userEl) {\n            return {\n              id: Date.now() + Math.random(),\n              username: userEl.href.split('/').pop(),\n              text: textEl.innerText,\n              url: userEl.href,\n              timestamp: timeEl ? timeEl.getAttribute('datetime') : new Date().toISOString(),\n              likes: likesEl ? parseInt(likesEl.innerText.replace(/[^0-9]/g, '')) || 0 : 0,\n              isVerified: !!verifiedEl,\n              filter: filter\n            };\n          }\n          return null;\n        }).filter(Boolean);\n      });\n      \n      allTweets.push(...tweets);\n    } catch (e) {\n      console.error('Filter error:', e);\n    }\n  }\n  \n  await browser.close();\n  console.log(JSON.stringify(allTweets));\n})();\n`;\n\n// Write script to temporary file\nconst fs = require('fs');\nconst path = '/tmp/twitter_scraper.js';\nfs.writeFileSync(path, puppeteerScript);\n\nreturn [{ scriptPath: path }];"
+      },
+      "name": "Prepare Puppeteer Script",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /tmp && npm install puppeteer && node twitter_scraper.js",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Execute Puppeteer Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse Puppeteer output\nlet tweets = [];\n\ntry {\n  const output = $json.stdout || $json.data || '{}';\n  const parsed = JSON.parse(output);\n  \n  if (Array.isArray(parsed)) {\n    tweets = parsed;\n  } else if (parsed.tweets) {\n    tweets = parsed.tweets;\n  }\n  \n  // Filter and validate tweets\n  tweets = tweets.filter(tweet => {\n    return tweet && \n           tweet.text && \n           tweet.username && \n           tweet.likes >= 3 && \n           tweet.isVerified;\n  });\n  \n  console.log(`Processed ${tweets.length} tweets`);\n  \n} catch (e) {\n  console.error('Error parsing Puppeteer output:', e);\n  tweets = [];\n}\n\nreturn tweets;"
+      },
+      "name": "Parse Puppeteer Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Hourly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Puppeteer Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Puppeteer Script": {
+      "main": [
+        [
+          {
+            "node": "Execute Puppeteer Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Puppeteer Script": {
+      "main": [
+        [
+          {
+            "node": "Parse Puppeteer Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Prepare Puppeteer Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

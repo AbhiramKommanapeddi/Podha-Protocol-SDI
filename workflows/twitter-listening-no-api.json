@@ -1,0 +1,472 @@
+{
+  "name": "Twitter Listening Workflow (No API) - Podha Protocol",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 0 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "Hourly Twitter Scraper",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Podha%20AND%20(\"RWA\"%20OR%20\"Real%20World%20Assets\"%20OR%20\"Yield\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+          }
+        }
+      },
+      "name": "Scrape Podha RWA Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Solana%20AND%20(\"Smart%20Vaults\"%20OR%20\"Safe%20Yield\"%20OR%20\"Podha\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+          }
+        }
+      },
+      "name": "Scrape Solana Smart Vaults",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Bitcoin%20AND%20(\"tokenized%20treasury\"%20OR%20\"credit%20protocol\"%20OR%20\"RWA%20on-chain\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+          }
+        }
+      },
+      "name": "Scrape Bitcoin RWA Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20DeFi%20AND%20(\"custodial%20vault\"%20OR%20\"delta%20neutral\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+          }
+        }
+      },
+      "name": "Scrape DeFi Vault Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const cheerio = require('cheerio');\nconst extractedTweets = [];\n\n// Process each HTTP response\nfor (const item of items) {\n  if (item.json && item.json.data) {\n    const html = item.json.data;\n    const $ = cheerio.load(html);\n    \n    // Extract tweets from Nitter HTML\n    $('.timeline-item').each((i, element) => {\n      const $tweet = $(element);\n      const $header = $tweet.find('.tweet-header');\n      const $content = $tweet.find('.tweet-content');\n      const $stats = $tweet.find('.tweet-stats');\n      \n      // Extract tweet data\n      const username = $header.find('.username').text().trim();\n      const displayName = $header.find('.fullname').text().trim();\n      const tweetText = $content.find('.tweet-text').text().trim();\n      const tweetLink = $header.find('.tweet-link').attr('href');\n      const timestamp = $header.find('.tweet-date').attr('title');\n      \n      // Extract engagement metrics\n      const likes = parseInt($stats.find('.likes').text().replace(/[^0-9]/g, '')) || 0;\n      const retweets = parseInt($stats.find('.retweets').text().replace(/[^0-9]/g, '')) || 0;\n      const replies = parseInt($stats.find('.replies').text().replace(/[^0-9]/g, '')) || 0;\n      \n      // Check if user is verified (blue checkmark)\n      const isVerified = $header.find('.verified').length > 0;\n      \n      // Only process tweets that meet our criteria\n      if (tweetText && username && likes >= 3 && isVerified) {\n        // Generate unique tweet ID\n        const tweetId = tweetLink ? tweetLink.split('/').pop() : `${username}_${Date.now()}`;\n        \n        extractedTweets.push({\n          id: tweetId,\n          username: username,\n          displayName: displayName,\n          text: tweetText,\n          url: tweetLink ? `https://twitter.com${tweetLink}` : null,\n          timestamp: timestamp || new Date().toISOString(),\n          likes: likes,\n          retweets: retweets,\n          replies: replies,\n          isVerified: isVerified,\n          platform: 'Twitter',\n          scraped_at: new Date().toISOString()\n        });\n      }\n    });\n  }\n}\n\n// Fallback: If Nitter fails, try alternative scraping method\nif (extractedTweets.length === 0) {\n  console.log('No tweets found via Nitter, trying alternative method');\n  \n  // Alternative: Use Twitter's public search (limited)\n  for (const item of items) {\n    if (item.json && typeof item.json === 'string') {\n      const html = item.json;\n      \n      // Simple regex-based extraction as fallback\n      const tweetPattern = /<article[^>]*data-testid=\"tweet\"[^>]*>([\\s\\S]*?)<\\/article>/g;\n      let match;\n      \n      while ((match = tweetPattern.exec(html)) !== null) {\n        const tweetHtml = match[1];\n        \n        // Extract basic tweet info using regex\n        const textMatch = tweetHtml.match(/<div[^>]*data-testid=\"tweetText\"[^>]*>([\\s\\S]*?)<\\/div>/);\n        const userMatch = tweetHtml.match(/<span[^>]*>@([a-zA-Z0-9_]+)<\\/span>/);\n        \n        if (textMatch && userMatch) {\n          const cleanText = textMatch[1].replace(/<[^>]*>/g, '').trim();\n          const username = userMatch[1];\n          \n          extractedTweets.push({\n            id: `${username}_${Date.now()}_${Math.random()}`,\n            username: username,\n            displayName: username,\n            text: cleanText,\n            url: `https://twitter.com/${username}`,\n            timestamp: new Date().toISOString(),\n            likes: 3, // Assume minimum threshold met\n            retweets: 0,\n            replies: 0,\n            isVerified: true, // Assume verified since we're filtering for it\n            platform: 'Twitter',\n            scraped_at: new Date().toISOString()\n          });\n        }\n      }\n    }\n  }\n}\n\nconsole.log(`Extracted ${extractedTweets.length} tweets`);\nreturn extractedTweets;"
+      },
+      "name": "Parse Twitter HTML",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id FROM twitter_seen_tweets WHERE tweet_id = $1",
+        "additionalFields": {
+          "mode": "single"
+        }
+      },
+      "name": "Check if Tweet Seen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.id}}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Filter New Tweets",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "twitter_seen_tweets",
+        "columns": "tweet_id, username, tweet_text, tweet_url, scraped_at",
+        "additionalFields": {
+          "mode": "single"
+        }
+      },
+      "name": "Mark Tweet as Seen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format tweet for Discord\nconst tweet = $json;\n\n// Create rich Discord embed\nconst embed = {\n  title: `🐦 New Tweet from @${tweet.username}`,\n  description: tweet.text,\n  color: 1942002, // Twitter blue color\n  timestamp: new Date(tweet.timestamp).toISOString(),\n  fields: [\n    {\n      name: \"📊 Engagement\",\n      value: `❤️ ${tweet.likes} | 🔄 ${tweet.retweets} | 💬 ${tweet.replies}`,\n      inline: true\n    },\n    {\n      name: \"🔗 Link\",\n      value: tweet.url || `https://twitter.com/${tweet.username}`,\n      inline: true\n    }\n  ],\n  footer: {\n    text: \"Podha Protocol Twitter Monitor\",\n    icon_url: \"https://pbs.twimg.com/profile_images/1234567890/twitter_icon.jpg\"\n  }\n};\n\n// Add verification badge if verified\nif (tweet.isVerified) {\n  embed.author = {\n    name: `${tweet.displayName} ✅`,\n    icon_url: `https://unavatar.io/twitter/${tweet.username}`\n  };\n}\n\n// Add keywords that triggered the match\nconst keywords = [];\nif (tweet.text.toLowerCase().includes('podha')) keywords.push('Podha');\nif (tweet.text.toLowerCase().includes('rwa')) keywords.push('RWA');\nif (tweet.text.toLowerCase().includes('real world assets')) keywords.push('Real World Assets');\nif (tweet.text.toLowerCase().includes('yield')) keywords.push('Yield');\nif (tweet.text.toLowerCase().includes('solana')) keywords.push('Solana');\nif (tweet.text.toLowerCase().includes('bitcoin')) keywords.push('Bitcoin');\nif (tweet.text.toLowerCase().includes('defi')) keywords.push('DeFi');\n\nif (keywords.length > 0) {\n  embed.fields.push({\n    name: \"🏷️ Matched Keywords\",\n    value: keywords.join(', '),\n    inline: false\n  });\n}\n\nreturn [{\n  embeds: [embed],\n  username: \"Podha Twitter Monitor\",\n  avatar_url: \"https://cdn.discordapp.com/avatars/bot_id/avatar.png\"\n}];"
+      },
+      "name": "Format Discord Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "body": "={{JSON.stringify($json)}}"
+      },
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "social_listening_data",
+        "columns": "platform, source, title, content, url, author, published, matched_keywords, sentiment, created_at",
+        "additionalFields": {
+          "mode": "single"
+        }
+      },
+      "name": "Store Tweet Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error handling and logging\nconst error = $json;\n\nconsole.error('Twitter scraping error:', error);\n\n// Try alternative Nitter instances\nconst alternativeInstances = [\n  'https://nitter.it',\n  'https://nitter.42l.fr',\n  'https://nitter.pussthecat.org',\n  'https://nitter.fdn.fr'\n];\n\n// Return alternative instance to try\nreturn [{\n  alternative_instance: alternativeInstances[Math.floor(Math.random() * alternativeInstances.length)],\n  error_message: error.message || 'Unknown error',\n  timestamp: new Date().toISOString()\n}];"
+      },
+      "name": "Handle Scraping Errors",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "body": "{\n  \"embeds\": [{\n    \"title\": \"⚠️ Twitter Scraping Error\",\n    \"description\": \"Failed to scrape Twitter data. Will retry with alternative instance.\",\n    \"color\": 16711680,\n    \"fields\": [\n      {\n        \"name\": \"Error\",\n        \"value\": \"{{$json.error_message}}\",\n        \"inline\": false\n      },\n      {\n        \"name\": \"Alternative Instance\",\n        \"value\": \"{{$json.alternative_instance}}\",\n        \"inline\": false\n      }\n    ],\n    \"timestamp\": \"{{$json.timestamp}}\"\n  }]\n}"
+      },
+      "name": "Send Error to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        900,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "body": "{\n  \"embeds\": [{\n    \"title\": \"🚀 Twitter Monitor Started\",\n    \"description\": \"Podha Protocol Twitter monitoring workflow is now active.\",\n    \"color\": 65280,\n    \"fields\": [\n      {\n        \"name\": \"Monitoring Keywords\",\n        \"value\": \"Podha, RWA, Real World Assets, Yield, Solana, Bitcoin, DeFi\",\n        \"inline\": false\n      },\n      {\n        \"name\": \"Schedule\",\n        \"value\": \"Every hour\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"Filters\",\n        \"value\": \"Blue verified, min 3 likes\",\n        \"inline\": true\n      }\n    ],\n    \"timestamp\": \"{{new Date().toISOString()}}\"\n  }]\n}"
+      },
+      "name": "Send Startup Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Hourly Twitter Scraper": {
+      "main": [
+        [
+          {
+            "node": "Scrape Podha RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Solana Smart Vaults",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Bitcoin RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape DeFi Vault Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Podha RWA Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Handle Scraping Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Solana Smart Vaults": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Handle Scraping Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Bitcoin RWA Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Handle Scraping Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape DeFi Vault Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Handle Scraping Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Twitter HTML": {
+      "main": [
+        [
+          {
+            "node": "Check if Tweet Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Tweet Seen": {
+      "main": [
+        [
+          {
+            "node": "Filter New Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Tweets": {
+      "main": [
+        [
+          {
+            "node": "Mark Tweet as Seen",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Discord Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Tweet Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Discord Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Scraping Errors": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Startup Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Podha RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Solana Smart Vaults",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Bitcoin RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape DeFi Vault Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

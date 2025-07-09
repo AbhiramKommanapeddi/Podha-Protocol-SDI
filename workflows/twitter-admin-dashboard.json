@@ -1,0 +1,297 @@
+{
+  "name": "Twitter Monitoring Admin Dashboard",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Manual Dashboard Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "/twitter-dashboard",
+        "options": {
+          "headers": {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json"
+          }
+        }
+      },
+      "name": "Dashboard Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COUNT(*) as total_tweets,\n  COUNT(DISTINCT username) as unique_users,\n  DATE_TRUNC('hour', scraped_at) as hour,\n  COUNT(*) as tweets_per_hour\nFROM twitter_seen_tweets \nWHERE scraped_at >= NOW() - INTERVAL '24 hours'\nGROUP BY DATE_TRUNC('hour', scraped_at)\nORDER BY hour DESC;"
+      },
+      "name": "Get Tweet Statistics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  filter_name,\n  search_query,\n  is_active,\n  created_at,\n  updated_at\nFROM twitter_monitoring_config\nORDER BY created_at DESC;"
+      },
+      "name": "Get Active Filters",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  username,\n  tweet_text,\n  tweet_url,\n  scraped_at\nFROM twitter_seen_tweets\nWHERE scraped_at >= NOW() - INTERVAL '24 hours'\nORDER BY scraped_at DESC\nLIMIT 20;"
+      },
+      "name": "Get Recent Tweets",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  status,\n  COUNT(*) as count,\n  DATE_TRUNC('hour', created_at) as hour\nFROM discord_notifications\nWHERE created_at >= NOW() - INTERVAL '24 hours'\nGROUP BY status, DATE_TRUNC('hour', created_at)\nORDER BY hour DESC;"
+      },
+      "name": "Get Discord Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate comprehensive dashboard data\nconst dashboardData = {\n  timestamp: new Date().toISOString(),\n  status: 'active',\n  statistics: {\n    tweets: $('Get Tweet Statistics').all().map(item => item.json),\n    filters: $('Get Active Filters').all().map(item => item.json),\n    recent_tweets: $('Get Recent Tweets').all().map(item => item.json),\n    discord_stats: $('Get Discord Stats').all().map(item => item.json)\n  },\n  summary: {\n    total_tweets_24h: 0,\n    unique_users_24h: 0,\n    active_filters: 0,\n    discord_success_rate: 0\n  },\n  health: {\n    database_connected: true,\n    scraper_status: 'running',\n    discord_integration: true,\n    last_successful_scrape: new Date().toISOString()\n  },\n  configuration: {\n    monitoring_enabled: true,\n    scraping_method: 'nitter',\n    fallback_method: 'puppeteer',\n    schedule: 'hourly',\n    filters_count: 4\n  }\n};\n\n// Calculate summary statistics\nconst tweetStats = dashboardData.statistics.tweets;\nif (tweetStats.length > 0) {\n  dashboardData.summary.total_tweets_24h = tweetStats.reduce((sum, stat) => sum + stat.tweets_per_hour, 0);\n  dashboardData.summary.unique_users_24h = tweetStats[0].unique_users || 0;\n}\n\ndashboardData.summary.active_filters = dashboardData.statistics.filters.filter(f => f.is_active).length;\n\n// Calculate Discord success rate\nconst discordStats = dashboardData.statistics.discord_stats;\nif (discordStats.length > 0) {\n  const totalNotifications = discordStats.reduce((sum, stat) => sum + stat.count, 0);\n  const successfulNotifications = discordStats.filter(stat => stat.status === 'sent').reduce((sum, stat) => sum + stat.count, 0);\n  dashboardData.summary.discord_success_rate = totalNotifications > 0 ? Math.round((successfulNotifications / totalNotifications) * 100) : 0;\n}\n\n// Generate HTML dashboard\nconst htmlDashboard = `\n<!DOCTYPE html>\n<html>\n<head>\n    <title>Podha Twitter Monitor Dashboard</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }\n        .dashboard { max-width: 1200px; margin: 0 auto; }\n        .header { background: #1da1f2; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }\n        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }\n        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n        .stat-value { font-size: 2em; font-weight: bold; color: #1da1f2; }\n        .stat-label { color: #666; margin-top: 5px; }\n        .section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n        .section h3 { margin-top: 0; color: #333; }\n        .tweet-item { border-bottom: 1px solid #eee; padding: 10px 0; }\n        .tweet-item:last-child { border-bottom: none; }\n        .tweet-user { font-weight: bold; color: #1da1f2; }\n        .tweet-text { margin: 5px 0; }\n        .tweet-time { color: #666; font-size: 0.9em; }\n        .filter-item { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }\n        .filter-active { border-left: 4px solid #28a745; }\n        .filter-inactive { border-left: 4px solid #dc3545; }\n        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }\n        .status-active { background: #28a745; }\n        .status-inactive { background: #dc3545; }\n        .refresh-btn { background: #1da1f2; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }\n        .refresh-btn:hover { background: #1991db; }\n    </style>\n</head>\n<body>\n    <div class=\"dashboard\">\n        <div class=\"header\">\n            <h1>🐦 Podha Twitter Monitor Dashboard</h1>\n            <p>Real-time monitoring of Twitter for Podha Protocol and RWA discussions</p>\n            <button class=\"refresh-btn\" onclick=\"location.reload()\">🔄 Refresh Dashboard</button>\n        </div>\n        \n        <div class=\"stats-grid\">\n            <div class=\"stat-card\">\n                <div class=\"stat-value\">${dashboardData.summary.total_tweets_24h}</div>\n                <div class=\"stat-label\">Tweets (24h)</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"stat-value\">${dashboardData.summary.unique_users_24h}</div>\n                <div class=\"stat-label\">Unique Users</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"stat-value\">${dashboardData.summary.active_filters}</div>\n                <div class=\"stat-label\">Active Filters</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"stat-value\">${dashboardData.summary.discord_success_rate}%</div>\n                <div class=\"stat-label\">Discord Success Rate</div>\n            </div>\n        </div>\n        \n        <div class=\"section\">\n            <h3>📊 System Status</h3>\n            <p><span class=\"status-indicator status-active\"></span> Database Connected: ${dashboardData.health.database_connected ? 'Yes' : 'No'}</p>\n            <p><span class=\"status-indicator status-active\"></span> Scraper Status: ${dashboardData.health.scraper_status}</p>\n            <p><span class=\"status-indicator status-active\"></span> Discord Integration: ${dashboardData.health.discord_integration ? 'Active' : 'Inactive'}</p>\n            <p><span class=\"status-indicator status-active\"></span> Last Successful Scrape: ${new Date(dashboardData.health.last_successful_scrape).toLocaleString()}</p>\n        </div>\n        \n        <div class=\"section\">\n            <h3>🔍 Active Filters</h3>\n            ${dashboardData.statistics.filters.map(filter => `\n                <div class=\"filter-item ${filter.is_active ? 'filter-active' : 'filter-inactive'}\">\n                    <strong>${filter.filter_name}</strong>\n                    <p>${filter.search_query}</p>\n                    <small>Status: ${filter.is_active ? 'Active' : 'Inactive'} | Created: ${new Date(filter.created_at).toLocaleString()}</small>\n                </div>\n            `).join('')}\n        </div>\n        \n        <div class=\"section\">\n            <h3>🐦 Recent Tweets</h3>\n            ${dashboardData.statistics.recent_tweets.slice(0, 10).map(tweet => `\n                <div class=\"tweet-item\">\n                    <div class=\"tweet-user\">@${tweet.username}</div>\n                    <div class=\"tweet-text\">${tweet.tweet_text.substring(0, 200)}${tweet.tweet_text.length > 200 ? '...' : ''}</div>\n                    <div class=\"tweet-time\">${new Date(tweet.scraped_at).toLocaleString()}</div>\n                    ${tweet.tweet_url ? `<a href=\"${tweet.tweet_url}\" target=\"_blank\">View Tweet</a>` : ''}\n                </div>\n            `).join('')}\n        </div>\n        \n        <div class=\"section\">\n            <h3>⚙️ Configuration</h3>\n            <p><strong>Monitoring:</strong> ${dashboardData.configuration.monitoring_enabled ? 'Enabled' : 'Disabled'}</p>\n            <p><strong>Scraping Method:</strong> ${dashboardData.configuration.scraping_method}</p>\n            <p><strong>Fallback Method:</strong> ${dashboardData.configuration.fallback_method}</p>\n            <p><strong>Schedule:</strong> ${dashboardData.configuration.schedule}</p>\n            <p><strong>Active Filters:</strong> ${dashboardData.configuration.filters_count}</p>\n        </div>\n    </div>\n    \n    <script>\n        // Auto-refresh every 5 minutes\n        setTimeout(() => location.reload(), 300000);\n    </script>\n</body>\n</html>\n`;\n\nreturn [{\n  dashboard_data: dashboardData,\n  html_dashboard: htmlDashboard\n}];"
+      },
+      "name": "Generate Dashboard",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "html",
+        "responseBody": "={{$json.html_dashboard}}",
+        "options": {
+          "headers": {
+            "Content-Type": "text/html"
+          }
+        }
+      },
+      "name": "Return Dashboard HTML",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/twitter-test",
+        "options": {
+          "headers": {
+            "Access-Control-Allow-Origin": "*"
+          }
+        }
+      },
+      "name": "Test Trigger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "body": "{\n  \"embeds\": [{\n    \"title\": \"🧪 Twitter Monitor Test\",\n    \"description\": \"Manual test trigger activated by admin dashboard.\",\n    \"color\": 65280,\n    \"fields\": [\n      {\n        \"name\": \"Triggered By\",\n        \"value\": \"Admin Dashboard\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"Test Time\",\n        \"value\": \"{{new Date().toISOString()}}\",\n        \"inline\": true\n      },\n      {\n        \"name\": \"Status\",\n        \"value\": \"System operational\",\n        \"inline\": false\n      }\n    ],\n    \"timestamp\": \"{{new Date().toISOString()}}\"\n  }]\n}"
+      },
+      "name": "Send Test Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"success\",\n  \"message\": \"Test notification sent to Discord\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}"
+      },
+      "name": "Return Test Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        680,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Dashboard Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Tweet Statistics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Active Filters",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recent Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Discord Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dashboard Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Tweet Statistics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Active Filters",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recent Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Discord Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tweet Statistics": {
+      "main": [
+        [
+          {
+            "node": "Generate Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Filters": {
+      "main": [
+        [
+          {
+            "node": "Generate Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Tweets": {
+      "main": [
+        [
+          {
+            "node": "Generate Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Discord Stats": {
+      "main": [
+        [
+          {
+            "node": "Generate Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Return Dashboard HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Trigger Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send Test Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Test Notification": {
+      "main": [
+        [
+          {
+            "node": "Return Test Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

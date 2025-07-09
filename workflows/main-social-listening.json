@@ -1,0 +1,338 @@
+{
+  "name": "Podha Protocol Social Listening Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 */15 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/RealWorldAssets/new.json",
+        "options": {
+          "headers": {
+            "User-Agent": "PodhaProtocol-SocialListener/1.0"
+          }
+        }
+      },
+      "name": "Reddit RWA Subreddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/DeFi/new.json",
+        "options": {
+          "headers": {
+            "User-Agent": "PodhaProtocol-SocialListener/1.0"
+          }
+        }
+      },
+      "name": "Reddit DeFi Subreddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/blockchain/new.json",
+        "options": {
+          "headers": {
+            "User-Agent": "PodhaProtocol-SocialListener/1.0"
+          }
+        }
+      },
+      "name": "Reddit Blockchain Subreddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter and process Reddit data\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization',\n  'tokenized assets',\n  'real estate tokens',\n  'commodity tokenization',\n  'fractional ownership'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.json && item.json.data && item.json.data.children) {\n    for (const post of item.json.data.children) {\n      const postData = post.data;\n      const title = postData.title ? postData.title.toLowerCase() : '';\n      const selftext = postData.selftext ? postData.selftext.toLowerCase() : '';\n      const content = title + ' ' + selftext;\n      \n      // Check if any keyword matches\n      const matchedKeywords = keywords.filter(keyword => \n        content.includes(keyword.toLowerCase())\n      );\n      \n      if (matchedKeywords.length > 0) {\n        results.push({\n          platform: 'Reddit',\n          source: postData.subreddit_name_prefixed,\n          title: postData.title,\n          content: postData.selftext,\n          url: 'https://reddit.com' + postData.permalink,\n          author: postData.author,\n          score: postData.score,\n          comments: postData.num_comments,\n          created: new Date(postData.created_utc * 1000).toISOString(),\n          matched_keywords: matchedKeywords,\n          sentiment: 'neutral' // Will be analyzed in next step\n        });\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process Reddit Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://newsapi.org/v2/everything",
+        "options": {
+          "queryParameters": {
+            "q": "\"real world assets\" OR \"asset tokenization\" OR \"Podha Protocol\"",
+            "sortBy": "publishedAt",
+            "language": "en",
+            "pageSize": "50"
+          },
+          "headers": {
+            "X-API-Key": "={{$env.NEWS_API_KEY}}"
+          }
+        }
+      },
+      "name": "News API Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process News API data\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization',\n  'tokenized assets',\n  'real estate tokens',\n  'commodity tokenization'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.json && item.json.articles) {\n    for (const article of item.json.articles) {\n      const title = article.title ? article.title.toLowerCase() : '';\n      const description = article.description ? article.description.toLowerCase() : '';\n      const content = title + ' ' + description;\n      \n      const matchedKeywords = keywords.filter(keyword => \n        content.includes(keyword.toLowerCase())\n      );\n      \n      if (matchedKeywords.length > 0) {\n        results.push({\n          platform: 'News',\n          source: article.source.name,\n          title: article.title,\n          content: article.description,\n          url: article.url,\n          author: article.author,\n          published: article.publishedAt,\n          matched_keywords: matchedKeywords,\n          sentiment: 'neutral'\n        });\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process News Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Simple sentiment analysis\nconst positiveWords = ['good', 'great', 'excellent', 'amazing', 'bullish', 'positive', 'growth', 'innovation', 'revolutionary', 'promising'];\nconst negativeWords = ['bad', 'terrible', 'awful', 'bearish', 'negative', 'decline', 'scam', 'fraud', 'risky', 'concerning'];\n\nconst results = [];\n\nfor (const item of items) {\n  const content = (item.title + ' ' + item.content).toLowerCase();\n  \n  const positiveCount = positiveWords.filter(word => content.includes(word)).length;\n  const negativeCount = negativeWords.filter(word => content.includes(word)).length;\n  \n  let sentiment = 'neutral';\n  if (positiveCount > negativeCount) {\n    sentiment = 'positive';\n  } else if (negativeCount > positiveCount) {\n    sentiment = 'negative';\n  }\n  \n  results.push({\n    ...item,\n    sentiment: sentiment,\n    sentiment_score: positiveCount - negativeCount\n  });\n}\n\nreturn results;"
+      },
+      "name": "Sentiment Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "table": "social_listening_data",
+        "columns": "platform, source, title, content, url, author, published, matched_keywords, sentiment, sentiment_score, created_at"
+      },
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.sentiment}}",
+              "operation": "equal",
+              "value2": "negative"
+            }
+          ]
+        }
+      },
+      "name": "Filter Negative Sentiment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Alert: Negative Sentiment Detected - Podha Protocol",
+        "message": "Negative sentiment detected in social listening:\n\nPlatform: {{$json.platform}}\nSource: {{$json.source}}\nTitle: {{$json.title}}\nContent: {{$json.content}}\nURL: {{$json.url}}\nSentiment Score: {{$json.sentiment_score}}\n\nPlease review and take appropriate action.",
+        "options": {}
+      },
+      "name": "Send Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WEBHOOK_URL}}",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "body": {
+          "summary": "Social Listening Report",
+          "total_posts": "={{$json.length}}",
+          "positive_sentiment": "={{$json.filter(item => item.sentiment === 'positive').length}}",
+          "negative_sentiment": "={{$json.filter(item => item.sentiment === 'negative').length}}",
+          "neutral_sentiment": "={{$json.filter(item => item.sentiment === 'neutral').length}}",
+          "timestamp": "={{new Date().toISOString()}}"
+        }
+      },
+      "name": "Send Summary Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Reddit RWA Subreddit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reddit DeFi Subreddit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reddit Blockchain Subreddit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "News API Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reddit RWA Subreddit": {
+      "main": [
+        [
+          {
+            "node": "Process Reddit Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reddit DeFi Subreddit": {
+      "main": [
+        [
+          {
+            "node": "Process Reddit Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reddit Blockchain Subreddit": {
+      "main": [
+        [
+          {
+            "node": "Process Reddit Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Reddit Data": {
+      "main": [
+        [
+          {
+            "node": "Sentiment Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "News API Search": {
+      "main": [
+        [
+          {
+            "node": "Process News Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process News Data": {
+      "main": [
+        [
+          {
+            "node": "Sentiment Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment Analysis": {
+      "main": [
+        [
+          {
+            "node": "Save to Database",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Negative Sentiment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Negative Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,321 @@
+{
+  "name": "Podha Protocol Complete Twitter Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "Hourly Twitter Monitor",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Podha%20AND%20(\"RWA\"%20OR%20\"Real%20World%20Assets\"%20OR%20\"Yield\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "Scrape Podha RWA Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET", 
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Solana%20AND%20(\"Smart%20Vaults\"%20OR%20\"Safe%20Yield\"%20OR%20\"Podha\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "Scrape Solana Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20Bitcoin%20AND%20(\"tokenized%20treasury\"%20OR%20\"credit%20protocol\"%20OR%20\"RWA%20on-chain\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "Scrape Bitcoin RWA Tweets",
+      "type": "n8n-nodes-base.httpRequest", 
+      "typeVersion": 1,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://nitter.net/search?q=filter:blue_verified%20min_faves:3%20DeFi%20AND%20(\"custodial%20vault\"%20OR%20\"delta%20neutral\")&f=tweets",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "Scrape DeFi Vault Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "const cheerio = require('cheerio');\nconst extractedTweets = [];\n\n// Process each HTTP response\nfor (const item of items) {\n  if (item.json && item.json.data) {\n    const html = item.json.data;\n    const $ = cheerio.load(html);\n    \n    // Extract tweets from Nitter HTML\n    $('.timeline-item').each((i, element) => {\n      const $tweet = $(element);\n      const $header = $tweet.find('.tweet-header');\n      const $content = $tweet.find('.tweet-content');\n      const $stats = $tweet.find('.tweet-stats');\n      \n      const username = $header.find('.username').text().trim();\n      const displayName = $header.find('.fullname').text().trim();\n      const tweetText = $content.find('.tweet-text').text().trim();\n      const tweetLink = $header.find('.tweet-link').attr('href');\n      const timestamp = $header.find('.tweet-date').attr('title');\n      \n      const likes = parseInt($stats.find('.likes').text().replace(/[^0-9]/g, '')) || 0;\n      const retweets = parseInt($stats.find('.retweets').text().replace(/[^0-9]/g, '')) || 0;\n      const replies = parseInt($stats.find('.replies').text().replace(/[^0-9]/g, '')) || 0;\n      \n      const isVerified = $header.find('.verified').length > 0;\n      \n      if (tweetText && username && likes >= 3 && isVerified) {\n        const tweetId = tweetLink ? tweetLink.split('/').pop() : `${username}_${Date.now()}`;\n        \n        extractedTweets.push({\n          id: tweetId,\n          username: username,\n          displayName: displayName,\n          text: tweetText,\n          url: tweetLink ? `https://twitter.com${tweetLink}` : null,\n          timestamp: timestamp || new Date().toISOString(),\n          likes: likes,\n          retweets: retweets,\n          replies: replies,\n          isVerified: isVerified,\n          platform: 'Twitter',\n          scraped_at: new Date().toISOString()\n        });\n      }\n    });\n  }\n}\n\nconsole.log(`Extracted ${extractedTweets.length} tweets`);\nreturn extractedTweets;"
+      },
+      "name": "Parse Twitter HTML",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.length}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Check if Tweets Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 350]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "method": "POST",
+        "jsonBody": true,
+        "body": {
+          "embeds": [
+            {
+              "title": "🐦 New Podha Protocol Tweet Found!",
+              "description": "={{$json.text}}",
+              "color": 1942002,
+              "fields": [
+                {
+                  "name": "👤 User",
+                  "value": "@{{$json.username}} ({{$json.displayName}})",
+                  "inline": true
+                },
+                {
+                  "name": "💙 Verified",
+                  "value": "{{$json.isVerified ? '✅ Yes' : '❌ No'}}",
+                  "inline": true
+                },
+                {
+                  "name": "📊 Engagement",
+                  "value": "❤️ {{$json.likes}} | 🔄 {{$json.retweets}} | 💬 {{$json.replies}}",
+                  "inline": false
+                }
+              ],
+              "url": "{{$json.url}}",
+              "timestamp": "{{$json.timestamp}}",
+              "footer": {
+                "text": "Podha Protocol Twitter Monitor",
+                "icon_url": "https://twitter.com/favicon.ico"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1120, 350]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "twitter_seen_tweets",
+        "columns": "tweet_id, username, tweet_text, tweet_url, likes, retweets, is_verified, scraped_at",
+        "additionalFields": {}
+      },
+      "name": "Store Tweet in Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1340, 350]
+    },
+    {
+      "parameters": {},
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger", 
+      "typeVersion": 1,
+      "position": [240, 100]
+    }
+  ],
+  "connections": {
+    "Hourly Twitter Monitor": {
+      "main": [
+        [
+          {
+            "node": "Scrape Podha RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Solana Tweets", 
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Bitcoin RWA Tweets",
+            "type": "main", 
+            "index": 0
+          },
+          {
+            "node": "Scrape DeFi Vault Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Podha RWA Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Solana Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Bitcoin RWA Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape DeFi Vault Tweets": {
+      "main": [
+        [
+          {
+            "node": "Parse Twitter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Twitter HTML": {
+      "main": [
+        [
+          {
+            "node": "Check if Tweets Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Tweets Found": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          {
+            "node": "Store Tweet in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Scrape Podha RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape Solana Tweets",
+            "type": "main", 
+            "index": 0
+          },
+          {
+            "node": "Scrape Bitcoin RWA Tweets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scrape DeFi Vault Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "twitter-monitoring",
+      "name": "Twitter Monitoring"
+    },
+    {
+      "id": "podha-protocol", 
+      "name": "Podha Protocol"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-07-09T18:45:00.000Z",
+  "versionId": 1
+}

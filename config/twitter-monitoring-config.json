@@ -1,0 +1,113 @@
+{
+  "twitter_monitoring": {
+    "enabled": true,
+    "schedule": "0 0 * * * *",
+    "filters": [
+      {
+        "name": "Podha RWA",
+        "query": "filter:blue_verified min_faves:3 Podha AND (\"RWA\" OR \"Real World Assets\" OR \"Yield\")",
+        "active": true
+      },
+      {
+        "name": "Solana Smart Vaults",
+        "query": "filter:blue_verified min_faves:3 Solana AND (\"Smart Vaults\" OR \"Safe Yield\" OR \"Podha\")",
+        "active": true
+      },
+      {
+        "name": "Bitcoin RWA",
+        "query": "filter:blue_verified min_faves:3 Bitcoin AND (\"tokenized treasury\" OR \"credit protocol\" OR \"RWA on-chain\")",
+        "active": true
+      },
+      {
+        "name": "DeFi Vaults",
+        "query": "filter:blue_verified min_faves:3 DeFi AND (\"custodial vault\" OR \"delta neutral\")",
+        "active": true
+      }
+    ],
+    "scraping_options": {
+      "method": "nitter",
+      "fallback_method": "puppeteer",
+      "max_tweets_per_search": 20,
+      "rate_limit_delay": 2000,
+      "retry_attempts": 3,
+      "timeout": 30000
+    },
+    "authentication": {
+      "use_session_cookie": true,
+      "cookie_name": "auth_token",
+      "login_credentials": {
+        "enabled": false,
+        "username_env": "TWITTER_USERNAME",
+        "password_env": "TWITTER_PASSWORD"
+      }
+    },
+    "filters_criteria": {
+      "blue_verified_only": true,
+      "minimum_likes": 3,
+      "exclude_retweets": false,
+      "exclude_replies": false,
+      "max_age_hours": 24
+    },
+    "nitter_instances": [
+      "https://nitter.net",
+      "https://nitter.it",
+      "https://nitter.42l.fr",
+      "https://nitter.pussthecat.org",
+      "https://nitter.fdn.fr",
+      "https://nitter.kavin.rocks",
+      "https://nitter.unixfox.eu"
+    ],
+    "deduplication": {
+      "enabled": true,
+      "method": "database",
+      "retention_days": 30
+    },
+    "discord_integration": {
+      "enabled": true,
+      "webhook_url_env": "DISCORD_WEBHOOK_URL",
+      "username": "Podha Twitter Monitor",
+      "avatar_url": "https://cdn.discordapp.com/avatars/bot_id/avatar.png",
+      "embed_color": 1942002,
+      "mention_on_high_engagement": true,
+      "high_engagement_threshold": 50
+    },
+    "error_handling": {
+      "max_retries": 3,
+      "retry_delay": 5000,
+      "exponential_backoff": true,
+      "notify_on_failure": true,
+      "fallback_to_alternative": true
+    },
+    "logging": {
+      "enabled": true,
+      "level": "info",
+      "include_tweet_content": true,
+      "include_errors": true
+    }
+  },
+  "puppeteer_config": {
+    "headless": true,
+    "args": [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process",
+      "--disable-gpu"
+    ],
+    "timeout": 30000,
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  },
+  "admin_ui": {
+    "enabled": true,
+    "manual_trigger_enabled": true,
+    "test_mode": false,
+    "dashboard_webhook": "https://your-dashboard.com/webhook"
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "name": "podha-protocol-social-listening",
+  "version": "1.0.0",
+  "description": "Comprehensive social listening workflow for Podha Protocol and Real World Assets (RWA) monitoring using n8n",
+  "main": "index.js",
+  "scripts": {
+    "start": "n8n start",
+    "setup": "bash scripts/setup.sh",
+    "analyze": "bash scripts/analyze-data.sh",
+    "export": "bash scripts/export-data.sh",
+    "test": "npm run test:workflows && npm run test:database",
+    "test:workflows": "echo 'Testing n8n workflows...' && n8n execute --file workflows/main-social-listening.json",
+    "test:database": "psql -d social_listening -c 'SELECT COUNT(*) FROM social_listening_data;'",
+    "backup": "pg_dump social_listening > backups/backup_$(date +%Y%m%d_%H%M%S).sql",
+    "restore": "psql -d social_listening -f $1",
+    "dev": "n8n start --tunnel",
+    "build": "echo 'Building project...' && npm run setup",
+    "deploy": "echo 'Deploying to production...' && npm run build && npm start",
+    "lint": "echo 'Linting configuration files...'",
+    "clean": "rm -rf logs/* backups/* data/exports/*",
+    "twitter-scrape": "node scripts/twitter_scraper.js",
+    "twitter-monitor": "bash scripts/monitor_twitter.sh",
+    "twitter-setup": "bash scripts/setup-twitter-monitoring.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/podha-protocol/social-listening-workflow.git"
+  },
+  "keywords": [
+    "social-listening",
+    "n8n",
+    "podha-protocol",
+    "real-world-assets",
+    "rwa",
+    "sentiment-analysis",
+    "cryptocurrency",
+    "blockchain",
+    "monitoring",
+    "automation"
+  ],
+  "author": "Podha Protocol Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/podha-protocol/social-listening-workflow/issues"
+  },
+  "homepage": "https://github.com/podha-protocol/social-listening-workflow#readme",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "cheerio": "^1.1.0",
+    "cron": "^3.1.0",
+    "dotenv": "^16.6.1",
+    "n8n": "^1.0.0",
+    "nodemailer": "^6.9.0",
+    "pg": "^8.11.0",
+    "puppeteer": "^21.11.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "winston": "^3.11.0",
+    "xml2js": "^0.5.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.3",
+    "supertest": "^6.3.3"
+  },
+  "config": {
+    "n8n": {
+      "host": "0.0.0.0",
+      "port": 5678,
+      "protocol": "http"
+    },
+    "database": {
+      "type": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "social_listening"
+    },
+    "monitoring": {
+      "retention_days": 90,
+      "alert_threshold": 5,
+      "rate_limit": 60
+    }
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.json": [
+      "prettier --write"
+    ],
+    "*.md": [
+      "prettier --write"
+    ]
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/podha-protocol"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "tests",
+    "lib": "scripts"
+  },
+  "files": [
+    "workflows/",
+    "config/",
+    "scripts/",
+    "docs/",
+    "data/",
+    "README.md",
+    "LICENSE"
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "name": "YouTube Social Listening Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/search",
+        "options": {
+          "queryParameters": {
+            "part": "snippet",
+            "q": "\"Podha Protocol\" OR \"real world assets\" OR \"RWA tokenization\"",
+            "type": "video",
+            "order": "date",
+            "maxResults": "50",
+            "key": "={{$env.YOUTUBE_API_KEY}}"
+          }
+        }
+      },
+      "name": "YouTube Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process YouTube search results\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization',\n  'tokenized assets',\n  'real estate tokens',\n  'commodity tokenization'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.json && item.json.items) {\n    for (const video of item.json.items) {\n      const title = video.snippet.title ? video.snippet.title.toLowerCase() : '';\n      const description = video.snippet.description ? video.snippet.description.toLowerCase() : '';\n      const content = title + ' ' + description;\n      \n      const matchedKeywords = keywords.filter(keyword => \n        content.includes(keyword.toLowerCase())\n      );\n      \n      if (matchedKeywords.length > 0) {\n        results.push({\n          platform: 'YouTube',\n          source: video.snippet.channelTitle,\n          title: video.snippet.title,\n          content: video.snippet.description,\n          url: `https://www.youtube.com/watch?v=${video.id.videoId}`,\n          author: video.snippet.channelTitle,\n          published: video.snippet.publishedAt,\n          matched_keywords: matchedKeywords,\n          video_id: video.id.videoId,\n          thumbnail: video.snippet.thumbnails.default.url\n        });\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process YouTube Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/commentThreads",
+        "options": {
+          "queryParameters": {
+            "part": "snippet",
+            "videoId": "={{$json.video_id}}",
+            "maxResults": "20",
+            "key": "={{$env.YOUTUBE_API_KEY}}"
+          }
+        }
+      },
+      "name": "Get Video Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process YouTube comments\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.json && item.json.items) {\n    for (const comment of item.json.items) {\n      const commentText = comment.snippet.topLevelComment.snippet.textDisplay.toLowerCase();\n      \n      const matchedKeywords = keywords.filter(keyword => \n        commentText.includes(keyword.toLowerCase())\n      );\n      \n      if (matchedKeywords.length > 0) {\n        results.push({\n          platform: 'YouTube Comments',\n          source: 'YouTube',\n          title: 'Comment on: ' + $('Process YouTube Data').item.json.title,\n          content: comment.snippet.topLevelComment.snippet.textDisplay,\n          url: $('Process YouTube Data').item.json.url,\n          author: comment.snippet.topLevelComment.snippet.authorDisplayName,\n          published: comment.snippet.topLevelComment.snippet.publishedAt,\n          matched_keywords: matchedKeywords,\n          likes: comment.snippet.topLevelComment.snippet.likeCount\n        });\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process Comments",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "YouTube Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube Search": {
+      "main": [
+        [
+          {
+            "node": "Process YouTube Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process YouTube Data": {
+      "main": [
+        [
+          {
+            "node": "Get Video Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Video Comments": {
+      "main": [
+        [
+          {
+            "node": "Process Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "keywords": {
+    "primary": [
+      "podha protocol",
+      "real world assets",
+      "rwa",
+      "asset tokenization",
+      "tokenized assets",
+      "real estate tokens",
+      "commodity tokenization",
+      "fractional ownership"
+    ],
+    "secondary": [
+      "defi protocols",
+      "blockchain real estate",
+      "tokenized commodities",
+      "asset-backed tokens",
+      "digital assets",
+      "tokenization platform",
+      "rwa defi",
+      "real asset tokens"
+    ],
+    "company_specific": [
+      "podha",
+      "podha token",
+      "podha ecosystem",
+      "podha platform"
+    ]
+  },
+  "platforms": {
+    "reddit": {
+      "enabled": true,
+      "subreddits": [
+        "RealWorldAssets",
+        "DeFi",
+        "blockchain",
+        "CryptoCurrency",
+        "tokenization",
+        "realestate",
+        "investing",
+        "Web3"
+      ],
+      "rate_limit": "1 request per second"
+    },
+    "youtube": {
+      "enabled": true,
+      "search_frequency": "every 6 hours",
+      "max_results": 50,
+      "include_comments": true
+    },
+    "medium": {
+      "enabled": true,
+      "tags": [
+        "real-world-assets",
+        "defi",
+        "tokenization",
+        "blockchain",
+        "cryptocurrency",
+        "real-estate",
+        "asset-management"
+      ]
+    },
+    "news_api": {
+      "enabled": true,
+      "sources": [
+        "cointelegraph.com",
+        "coindesk.com",
+        "decrypt.co",
+        "theblock.co",
+        "blockchain.news"
+      ],
+      "language": "en"
+    },
+    "discord": {
+      "enabled": false,
+      "note": "Requires bot token and server access"
+    },
+    "telegram": {
+      "enabled": false,
+      "note": "Requires bot token and channel access"
+    }
+  },
+  "monitoring": {
+    "schedule": {
+      "main_workflow": "every 15 minutes",
+      "youtube_workflow": "every 6 hours",
+      "medium_workflow": "every 12 hours"
+    },
+    "data_retention": "90 days",
+    "alert_thresholds": {
+      "negative_sentiment": 5,
+      "high_volume": 20,
+      "keyword_spike": 10
+    }
+  },
+  "notifications": {
+    "email": {
+      "enabled": true,
+      "recipients": ["team@podhaprotocol.com"],
+      "frequency": "immediate for alerts, daily for summary"
+    },
+    "webhook": {
+      "enabled": true,
+      "url": "https://hooks.podhaprotocol.com/social-listening"
+    },
+    "slack": {
+      "enabled": false,
+      "webhook_url": ""
+    }
+  },
+  "sentiment_analysis": {
+    "enabled": true,
+    "method": "keyword_based",
+    "positive_keywords": [
+      "good", "great", "excellent", "amazing", "bullish", "positive", 
+      "growth", "innovation", "revolutionary", "promising", "successful",
+      "breakthrough", "adoption", "partnership", "launch", "milestone"
+    ],
+    "negative_keywords": [
+      "bad", "terrible", "awful", "bearish", "negative", "decline", 
+      "scam", "fraud", "risky", "concerning", "failed", "disappointed",
+      "crash", "dump", "rugpull", "ponzi", "bubble"
+    ]
+  }
+}

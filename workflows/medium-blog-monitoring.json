@@ -1,0 +1,226 @@
+{
+  "name": "Medium and Blog Monitoring Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 0 */12 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://medium.com/feed/tag/real-world-assets",
+        "options": {
+          "headers": {
+            "Accept": "application/rss+xml"
+          }
+        }
+      },
+      "name": "Medium RWA Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://medium.com/feed/tag/defi",
+        "options": {
+          "headers": {
+            "Accept": "application/rss+xml"
+          }
+        }
+      },
+      "name": "Medium DeFi Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://medium.com/feed/tag/tokenization",
+        "options": {
+          "headers": {
+            "Accept": "application/rss+xml"
+          }
+        }
+      },
+      "name": "Medium Tokenization Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse RSS feed and extract relevant articles\nconst xml2js = require('xml2js');\nconst parser = new xml2js.Parser();\n\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization',\n  'tokenized assets',\n  'real estate tokens',\n  'commodity tokenization'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.binary) {\n    // Parse RSS XML\n    const xmlData = item.binary.data.toString();\n    const parsed = await parser.parseStringPromise(xmlData);\n    \n    if (parsed.rss && parsed.rss.channel && parsed.rss.channel[0].item) {\n      for (const article of parsed.rss.channel[0].item) {\n        const title = article.title ? article.title[0].toLowerCase() : '';\n        const description = article.description ? article.description[0].toLowerCase() : '';\n        const content = title + ' ' + description;\n        \n        const matchedKeywords = keywords.filter(keyword => \n          content.includes(keyword.toLowerCase())\n        );\n        \n        if (matchedKeywords.length > 0) {\n          results.push({\n            platform: 'Medium',\n            source: 'Medium',\n            title: article.title[0],\n            content: article.description[0],\n            url: article.link[0],\n            author: article['dc:creator'] ? article['dc:creator'][0] : 'Unknown',\n            published: article.pubDate[0],\n            matched_keywords: matchedKeywords,\n            categories: article.category || []\n          });\n        }\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process Medium Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cointelegraph.com/rss",
+        "options": {
+          "headers": {
+            "Accept": "application/rss+xml"
+          }
+        }
+      },
+      "name": "CoinTelegraph RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+        "options": {
+          "headers": {
+            "Accept": "application/rss+xml"
+          }
+        }
+      },
+      "name": "CoinDesk RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        460,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process crypto news RSS feeds\nconst xml2js = require('xml2js');\nconst parser = new xml2js.Parser();\n\nconst keywords = [\n  'podha protocol',\n  'real world assets',\n  'rwa',\n  'asset tokenization',\n  'tokenized assets',\n  'real estate tokens',\n  'commodity tokenization'\n];\n\nconst results = [];\n\nfor (const item of items) {\n  if (item.binary) {\n    const xmlData = item.binary.data.toString();\n    const parsed = await parser.parseStringPromise(xmlData);\n    \n    if (parsed.rss && parsed.rss.channel && parsed.rss.channel[0].item) {\n      for (const article of parsed.rss.channel[0].item) {\n        const title = article.title ? article.title[0].toLowerCase() : '';\n        const description = article.description ? article.description[0].toLowerCase() : '';\n        const content = title + ' ' + description;\n        \n        const matchedKeywords = keywords.filter(keyword => \n          content.includes(keyword.toLowerCase())\n        );\n        \n        if (matchedKeywords.length > 0) {\n          results.push({\n            platform: 'Crypto News',\n            source: parsed.rss.channel[0].title[0],\n            title: article.title[0],\n            content: article.description[0],\n            url: article.link[0],\n            author: article['dc:creator'] ? article['dc:creator'][0] : 'Unknown',\n            published: article.pubDate[0],\n            matched_keywords: matchedKeywords\n          });\n        }\n      }\n    }\n  }\n}\n\nreturn results;"
+      },
+      "name": "Process News RSS",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        550
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Medium RWA Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Medium DeFi Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Medium Tokenization Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CoinTelegraph RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CoinDesk RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medium RWA Feed": {
+      "main": [
+        [
+          {
+            "node": "Process Medium Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medium DeFi Feed": {
+      "main": [
+        [
+          {
+            "node": "Process Medium Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medium Tokenization Feed": {
+      "main": [
+        [
+          {
+            "node": "Process Medium Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CoinTelegraph RSS": {
+      "main": [
+        [
+          {
+            "node": "Process News RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CoinDesk RSS": {
+      "main": [
+        [
+          {
+            "node": "Process News RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
